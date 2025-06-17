@@ -2,6 +2,14 @@
 
 EduMUSE is a comprehensive AI tutoring system that transforms study materials into personalized learning experiences. The platform combines document processing, knowledge retrieval, and interactive tutoring through a modular multi-agent architecture.
 
+## 📽️ EduMUSE Slides
+
+Our team presented this project to our graduate level advanced machine learning course
+
+[![View EduMUSE Slides](assets/edumuse-slides-preview.png)](https://docs.google.com/presentation/d/1HCL7mSL9XqY9xCJclddT1HCstpQT0JH9WHSIFe5MUOk/preview)
+
+Click the image above to view the full presentation.
+
 ## System Architecture
 
 ```
