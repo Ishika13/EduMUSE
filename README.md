@@ -159,7 +159,7 @@ EduMUSE/
 
 ## Usage Workflow
 
-1. **Start Services**: Run all 3 terminals as shown above
+1. **Start Services**: Run the 2 terminals as shown above
 2. **Upload Documents**: Use the file upload panel to add PDF study materials
 3. **View & Navigate**: Browse documents with the interactive PDF viewer
 4. **Select Text**: Highlight text sections you want to analyze
@@ -221,6 +221,7 @@ EduMUSE/
 - **Backend**: Flask (file handling), CrewAI (AI agents)
 - **AI Models**: GPT-4o via OpenAI API
 - **Search**: SerperDev API for academic sources
+- **Podcast Generation**: ElevenLabs API
 - **Storage**: Local filesystem with plans for cloud integration
 
 ## Testing & Evaluation
