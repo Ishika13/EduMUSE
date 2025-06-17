@@ -17,7 +17,8 @@ EduMUSE Platform
 - 📄 **Interactive PDF Viewer**: Smart document rendering with text selection and highlighting using `react-pdf-highlighter`
 - 🔍 **Multi-Modal Knowledge Retrieval**: Web search, LLM synthesis, and hybrid approaches via CrewAI agents
 - 🤖 **AI-Powered Analysis**: Text summarization, academic source discovery, and educational content generation
-- 📊 **Modular Flow System**: Extensible educational processing flows (quiz, summary, study plans)
+- 🎙️ **Podcast Generation**: Convert educational content into podcast-style conversations with ElevenLabs voices
+- 📊 **Modular Flow System**: Extensible educational processing flows (quiz, summary, podcast)
 - 🎨 **Modern UI**: Material-UI components with responsive design and dark/light themes
 
 ## Prerequisites
@@ -46,59 +47,52 @@ Your `.env` file should contain:
 MODEL=gpt-4o
 OPENAI_API_KEY=your_openai_api_key_here
 SERPER_API_KEY=your_serper_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 ```
 
 **Required API Keys:**
 
 - **OpenAI API Key**: Get from [OpenAI Platform](https://platform.openai.com/api-keys)
 - **Serper API Key**: Get from [Serper.dev](https://serper.dev/) for web search functionality
+- **ElevenLabs API Key**: Get from [ElevenLabs](https://elevenlabs.io/) for podcast generation
 
-### 3. Backend Setup
+### 3. Project Setup
 
 ```bash
-# Install Flask dependencies for file upload service
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Setup CrewAI knowledge system
+# Setup Frontend
+cd Frontend
+npm install
+cd ..
+
+# Create uploads directory if it doesn't exist
+mkdir -p uploads
+```
+
+### 4. Optional: Install CrewAI in Development Mode
+
+This step is optional but can be useful for development:
+
+```bash
 cd edumuse
 pip install -e .
 cd ..
 ```
 
-### 4. Frontend Setup
-
-```bash
-cd Frontend
-npm install
-cd ..
-```
-
-### 5. Create Upload Directory
-
-```bash
-mkdir -p uploads
-```
-
 ## Running EduMUSE
 
-Start all services in **3 separate terminals**:
+Start all services in **2 separate terminals**:
 
-### Terminal 1: File Upload Service
+### Terminal 1: File Upload Service (Backend)
 
 ```bash
 # Start Flask file upload server (port 5000)
 python file_upload.py
 ```
 
-### Terminal 2: CrewAI Knowledge System
-
-```bash
-cd edumuse
-crewai run
-# Alternative: python src/edumuse/main.py
-```
-
-### Terminal 3: Frontend Development Server
+### Terminal 2: Frontend Development Server
 
 ```bash
 cd Frontend
@@ -106,11 +100,22 @@ npm run dev
 # Opens on http://localhost:5173
 ```
 
+The Flask backend (file_upload.py) handles all the AI processing, including the CrewAI functionality, so you don't need to run the CrewAI system separately.
+
 ## Verify Setup
 
 1. **File Upload Service**: Visit `http://localhost:5000/health` → `{"status": "healthy"}`
 2. **Frontend**: Visit `http://localhost:5173` → Document viewer loads
 3. **Upload Test**: Try uploading a PDF through the interface
+4. **Test Podcast Generation**: Visit `http://localhost:5000/test-podcast` to test the podcast generation functionality
+
+## FFmpeg Requirement
+
+The podcast generation feature requires FFmpeg to be installed on your system:
+
+- **macOS**: Install with Homebrew: `brew install ffmpeg`
+- **Ubuntu/Debian**: Install with apt: `sudo apt install ffmpeg`
+- **Windows**: Download from [FFmpeg.org](https://ffmpeg.org/download.html) or install with Chocolatey: `choco install ffmpeg`
 
 ## Project Structure
 
@@ -169,11 +174,12 @@ EduMUSE/
 - **Web Search Flow**: Real-time academic source discovery using SerperDev API
 - **LLM Knowledge Flow**: Knowledge synthesis from training data
 - **Hybrid Retrieval Flow**: Combined web + LLM approach for comprehensive coverage
+- **Summary Flow**: Create concept explanations and summaries
+- **Assessment Flow**: Generate practice questions and assessments
+- **Podcast Flow**: Generate podcast-style conversations with ElevenLabs voices
 
 ### Planned Educational Flows
 
-- **Quiz Flow**: Generate practice questions and assessments
-- **Summary Flow**: Create concept explanations and summaries
 - **Study Plan Flow**: Organize learning sequences and roadmaps
 - **Citation Flow**: Format academic references and bibliographies
 
@@ -295,16 +301,21 @@ _EduMUSE: Transforming study materials into personalized AI-powered learning exp
 ```bash
 # Complete setup
 pip install -r requirements.txt
-cd edumuse && pip install -e . && cd ..
 cd Frontend && npm install && cd ..
+mkdir -p uploads
 
-# Run all services (3 terminals)
-python file_upload.py                          # Terminal 1 (Flask)
-cd edumuse && python src/edumuse/main.py       # Terminal 2 (CrewAI)
-cd Frontend && npm run dev                      # Terminal 3 (React)
+# Optional: Install CrewAI in development mode
+cd edumuse && pip install -e . && cd ..
+
+# Run services (2 terminals)
+python file_upload.py                          # Terminal 1 (Flask backend)
+cd Frontend && npm run dev                     # Terminal 2 (React frontend)
 
 # Access application
 open http://localhost:5173
+
+# Test podcast generation
+curl http://localhost:5000/test-podcast
 ```
 
 ### Generated Content Examples
@@ -334,13 +345,27 @@ Example from recent run:
 }
 ```
 
+## Useful Curl Commands
 
-Curl Commands for file_upload.py:
+```bash
+# Health check
+curl http://localhost:5000/health
 
+# Generate summary
 curl -X POST -H "Content-Type: application/json" \
 -d '{"action": "summarize", "filename": "AttentionIsAllYouNeed.pdf"}' \
 http://localhost:5000/process
 
+# Generate assessment
 curl -X POST -H "Content-Type: application/json" \
 -d '{"action": "assess", "filename": "AttentionIsAllYouNeed.pdf"}' \
 http://localhost:5000/process
+
+# Generate podcast
+curl -X POST -H "Content-Type: application/json" \
+-d '{"action": "podcast", "filename": "AttentionIsAllYouNeed.pdf"}' \
+http://localhost:5000/process
+
+# Test podcast generation (simplified)
+curl http://localhost:5000/test-podcast
+```
