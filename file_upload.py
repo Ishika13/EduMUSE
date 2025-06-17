@@ -304,22 +304,29 @@ Answer: Supervised learning uses labeled training data, while unsupervised learn
 @cross_origin()
 def test_podcast_generation():
     try:
+        print("DEBUG: Starting test-podcast endpoint")
         # Test the podcast flow directly
         from edumuse.flows.podcast_flow import PodcastFlow
         
+        print("DEBUG: Importing PodcastFlow completed")
         podcast_flow = PodcastFlow()
+        print("DEBUG: PodcastFlow instance created")
         
         test_sources = [{
             'content': 'Machine learning is a subset of artificial intelligence that enables computers to learn and make decisions from data without being explicitly programmed.',
             'title': 'ML Introduction'
         }]
+        print("DEBUG: Test sources created")
         
         test_context = {
             'topic': 'Introduction to Machine Learning',
             'user_level': 'intermediate'
         }
+        print("DEBUG: Test context created")
         
+        print("DEBUG: About to call podcast_flow.process")
         result = podcast_flow.process(test_sources, test_context)
+        print("DEBUG: podcast_flow.process completed successfully")
         
         return jsonify({
             'result': result,

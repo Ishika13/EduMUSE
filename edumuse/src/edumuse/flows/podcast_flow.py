@@ -2,11 +2,11 @@ import os
 import io
 import json
 import re
+import subprocess
 from typing import Dict, List, Any
 from datetime import datetime
 import elevenlabs
 from elevenlabs import play
-from pydub import AudioSegment
 from openai import OpenAI
 from edumuse.flows.flow_registry import EducationFlow, flow_registry
 
@@ -18,13 +18,19 @@ class PodcastFlow(EducationFlow):
     """Flow for generating podcast-style audio content from educational materials"""
     
     def __init__(self):
+        print("DEBUG: Initializing PodcastFlow")
         self.openai_client = OpenAI()
+        print("DEBUG: OpenAI client initialized")
+        
         elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
         if not elevenlabs_api_key:
             print("❌ ELEVENLABS_API_KEY not found in environment variables")
             raise ValueError("ELEVENLABS_API_KEY not found in environment variables")
         print(f"✅ ELEVENLABS_API_KEY found: {elevenlabs_api_key[:5]}...{elevenlabs_api_key[-5:]}")
+        
+        print("DEBUG: Setting ElevenLabs API key")
         elevenlabs.set_api_key(elevenlabs_api_key)
+        print("DEBUG: ElevenLabs API key set successfully")
     
     @property
     def flow_type(self) -> str:
@@ -43,11 +49,15 @@ class PodcastFlow(EducationFlow):
         
         try:
             print(f"🎙️ Starting podcast generation for topic: {context.get('topic', 'Educational Topic')}")
+            print(f"DEBUG: Process method started with {len(sources)} sources")
             
             # Extract content from sources
             content = ""
-            for source in sources:
-                content += source.get("content", "")
+            for i, source in enumerate(sources):
+                print(f"DEBUG: Processing source {i+1}/{len(sources)}")
+                source_content = source.get("content", "")
+                print(f"DEBUG: Source {i+1} content length: {len(source_content)} characters")
+                content += source_content
             
             print(f"📄 Extracted {len(content)} characters of content")
             
@@ -108,6 +118,9 @@ class PodcastFlow(EducationFlow):
     def _generate_podcast_dialogue(self, content: str, topic: str) -> List[Dict[str, Any]]:
         """Generate a podcast-style dialogue using OpenAI"""
         
+        print(f"DEBUG: Generating podcast dialogue for topic: {topic}")
+        print(f"DEBUG: Content length: {len(content)} characters")
+        
         prompt = (
             "You are a podcast script writer. Given the following content, "
             "generate a podcast-style conversation between a Host and a Guest. "
@@ -120,6 +133,7 @@ class PodcastFlow(EducationFlow):
             "Podcast Dialogue:"
         )
 
+        print(f"DEBUG: Sending request to OpenAI")
         response = self.openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -129,17 +143,23 @@ class PodcastFlow(EducationFlow):
             temperature=0.5,
             max_tokens=1500,
         )
+        print(f"DEBUG: Received response from OpenAI")
 
         try:
+            print(f"DEBUG: Processing OpenAI response")
             raw_output = response.choices[0].message.content.strip()
+            print(f"DEBUG: Raw output length: {len(raw_output)} characters")
 
             # Remove ``` or ```json wrappers if present
             if raw_output.startswith("```"):
+                print(f"DEBUG: Removing code block markers")
                 raw_output = raw_output.strip("`").strip()
                 if raw_output.lower().startswith("json"):
                     raw_output = raw_output[len("json"):].strip()
 
+            print(f"DEBUG: Parsing JSON output")
             parsed_list = json.loads(raw_output)
+            print(f"DEBUG: Successfully parsed JSON with {len(parsed_list)} dialogue segments")
             return parsed_list
 
         except Exception as e:
@@ -155,7 +175,7 @@ class PodcastFlow(EducationFlow):
             ]
     
     def _generate_audio(self, dialogue: List[Dict[str, Any]], topic: str) -> str:
-        """Generate audio from dialogue using ElevenLabs"""
+        """Generate audio from dialogue using ElevenLabs and FFmpeg"""
         
         # Create a timestamp for the filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -169,34 +189,90 @@ class PodcastFlow(EducationFlow):
         # Ensure the uploads directory exists
         os.makedirs(uploads_dir, exist_ok=True)
         
+        # Create a temporary directory for segment files
+        temp_dir = os.path.join(uploads_dir, f"temp_segments_{timestamp}")
+        os.makedirs(temp_dir, exist_ok=True)
+        print(f"DEBUG: Created temporary directory: {temp_dir}")
+        
         output_path = os.path.join(uploads_dir, output_filename)
         print(f"🎙️ Generating podcast to: {output_path}")
+        print(f"DEBUG: Starting audio generation with {len(dialogue)} dialogue segments")
         
         try:
-            # Generate audio segments
-            segments = []
-            for line in dialogue:
+            # Generate audio segments and save them as individual files
+            segment_files = []
+            for i, line in enumerate(dialogue):
                 print(f"🔊 {line['speaker']}: {line['text']}")
+                print(f"DEBUG: Processing segment {i+1}/{len(dialogue)} - Speaker: {line['speaker']}")
                 try:
+                    print(f"DEBUG: About to call elevenlabs.generate for {line['speaker']}")
+                    print(f"DEBUG: Voice ID: {line['voice_id']}")
+                    print(f"DEBUG: Text length: {len(line['text'])} characters")
+                    
                     audio_bytes = elevenlabs.generate(
                         text=line["text"],
                         voice=line["voice_id"],
                         model="eleven_multilingual_v2",
                     )
-                    segments.append(AudioSegment.from_file(io.BytesIO(audio_bytes), format="mp3"))
+                    print(f"DEBUG: elevenlabs.generate completed successfully, received {len(audio_bytes)} bytes")
+                    
+                    # Save the audio bytes directly to a file
+                    segment_file = os.path.join(temp_dir, f"segment_{i:03d}.mp3")
+                    print(f"DEBUG: Saving audio segment to file: {segment_file}")
+                    with open(segment_file, "wb") as f:
+                        f.write(audio_bytes)
+                    print(f"DEBUG: Successfully saved audio segment to file")
+                    
+                    segment_files.append(segment_file)
                     print(f"✅ Generated audio for: {line['speaker']}")
                 except Exception as e:
                     print(f"❌ Error generating audio for {line['speaker']}: {e}")
-                    # Create a silent segment as a fallback
-                    segments.append(AudioSegment.silent(duration=500))
+                    import traceback
+                    print(f"DEBUG: Full traceback for elevenlabs error: {traceback.format_exc()}")
+                    # Skip this segment
+                    print(f"DEBUG: Skipping this segment due to error")
 
-            # Combine audio and export
-            if segments:
-                print(f"🔄 Combining {len(segments)} audio segments...")
-                final_audio = sum(segments)
-                final_audio.export(output_path, format="mp3")
-                print(f"✅ Podcast saved to: {output_path}")
-                return output_path
+            # Combine audio segments using FFmpeg
+            if segment_files:
+                print(f"🔄 Combining {len(segment_files)} audio segments using FFmpeg...")
+                
+                # Create a file list for FFmpeg
+                file_list_path = os.path.join(temp_dir, "file_list.txt")
+                with open(file_list_path, "w") as f:
+                    for segment_file in segment_files:
+                        f.write(f"file '{segment_file}'\n")
+                print(f"DEBUG: Created file list for FFmpeg: {file_list_path}")
+                
+                # Use FFmpeg to concatenate the files
+                ffmpeg_cmd = [
+                    "ffmpeg", 
+                    "-f", "concat", 
+                    "-safe", "0", 
+                    "-i", file_list_path, 
+                    "-c", "copy", 
+                    output_path
+                ]
+                print(f"DEBUG: Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
+                
+                try:
+                    subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+                    print(f"DEBUG: FFmpeg command completed successfully")
+                    print(f"✅ Podcast saved to: {output_path}")
+                    
+                    # Clean up temporary files
+                    print(f"DEBUG: Cleaning up temporary files")
+                    for segment_file in segment_files:
+                        os.remove(segment_file)
+                    os.remove(file_list_path)
+                    os.rmdir(temp_dir)
+                    print(f"DEBUG: Temporary files cleaned up")
+                    
+                    return output_path
+                except subprocess.CalledProcessError as e:
+                    print(f"❌ Error running FFmpeg: {e}")
+                    print(f"DEBUG: FFmpeg stdout: {e.stdout.decode() if e.stdout else 'None'}")
+                    print(f"DEBUG: FFmpeg stderr: {e.stderr.decode() if e.stderr else 'None'}")
+                    return ""
             else:
                 print("❌ No audio segments were generated")
                 return ""
@@ -217,11 +293,24 @@ class PodcastFlow(EducationFlow):
         return formatted_text
     
     def _get_audio_duration(self, audio_path: str) -> float:
-        """Get the duration of an audio file in seconds"""
+        """Get the duration of an audio file in seconds using FFmpeg"""
         
         try:
-            audio = AudioSegment.from_file(audio_path)
-            return len(audio) / 1000.0  # Convert milliseconds to seconds
+            # Use FFmpeg to get the duration
+            ffprobe_cmd = [
+                "ffprobe", 
+                "-v", "error", 
+                "-show_entries", "format=duration", 
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                audio_path
+            ]
+            print(f"DEBUG: Running FFprobe command: {' '.join(ffprobe_cmd)}")
+            
+            result = subprocess.run(ffprobe_cmd, check=True, capture_output=True, text=True)
+            duration = float(result.stdout.strip())
+            print(f"DEBUG: Audio duration: {duration} seconds")
+            
+            return duration
         except Exception as e:
             print(f"Error getting audio duration: {e}")
             return 0.0
