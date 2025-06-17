@@ -51,15 +51,34 @@ class PodcastFlow(EducationFlow):
             print(f"🎙️ Starting podcast generation for topic: {context.get('topic', 'Educational Topic')}")
             print(f"DEBUG: Process method started with {len(sources)} sources")
             
-            # Extract content from sources
+            # Extract content and title from sources
             content = ""
+            document_title = None
+            
             for i, source in enumerate(sources):
                 print(f"DEBUG: Processing source {i+1}/{len(sources)}")
                 source_content = source.get("content", "")
                 print(f"DEBUG: Source {i+1} content length: {len(source_content)} characters")
                 content += source_content
+                
+                # Try to get the title from the source
+                if not document_title and source.get("title"):
+                    document_title = source.get("title")
+                    print(f"DEBUG: Found document title: {document_title}")
+            
+            # If no title was found in sources, try to extract it from the content
+            if not document_title:
+                document_title = self._extract_title_from_content(content)
+                if document_title:
+                    print(f"DEBUG: Extracted document title from content: {document_title}")
+            
+            # If we still don't have a title, use the topic from context
+            if not document_title:
+                document_title = context.get('topic', 'Educational Topic')
+                print(f"DEBUG: Using topic as document title: {document_title}")
             
             print(f"📄 Extracted {len(content)} characters of content")
+            print(f"📑 Document title: {document_title}")
             
             # Generate podcast dialogue using OpenAI
             print("🤖 Generating podcast dialogue using OpenAI...")
@@ -115,17 +134,54 @@ class PodcastFlow(EducationFlow):
                 }
             }
     
+    def _extract_title_from_content(self, content: str) -> str:
+        """Extract a title from the content using heuristics"""
+        
+        # Try to find a title in the first few lines
+        lines = content.split('\n')
+        for i in range(min(5, len(lines))):
+            line = lines[i].strip()
+            # Look for lines that might be titles (not too long, no punctuation at the end)
+            if 3 < len(line) < 100 and not line.endswith(('.', ':', ';', ',', '?', '!')):
+                return line
+        
+        # If no title found, try to use OpenAI to extract a title
+        try:
+            print(f"DEBUG: Attempting to extract title using OpenAI")
+            response = self.openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": f"Extract the title or main topic from this text. Respond with ONLY the title, nothing else:\n\n{content[:1000]}"},
+                ],
+                temperature=0.3,
+                max_tokens=50,
+            )
+            title = response.choices[0].message.content.strip()
+            print(f"DEBUG: Extracted title using OpenAI: {title}")
+            return title
+        except Exception as e:
+            print(f"DEBUG: Error extracting title using OpenAI: {e}")
+            return None
+    
     def _generate_podcast_dialogue(self, content: str, topic: str) -> List[Dict[str, Any]]:
         """Generate a podcast-style dialogue using OpenAI"""
         
         print(f"DEBUG: Generating podcast dialogue for topic: {topic}")
         print(f"DEBUG: Content length: {len(content)} characters")
         
+        # Extract a clean title from the topic (which might be a filename)
+        clean_topic = topic
+        if topic.endswith('.pdf'):
+            clean_topic = topic[:-4]  # Remove .pdf extension
+        
         prompt = (
             "You are a podcast script writer. Given the following content, "
             "generate a podcast-style conversation between a Host and a Guest. "
             "The conversation should be informative, engaging, and cover the main points. "
-            f"The topic is: {topic}. "
+            f"The topic is: {clean_topic}. "
+            "The Host should introduce the topic by its proper title, not as a filename. "
+            "Make the introduction natural and engaging, as if this were a real educational podcast. "
             f"Return a **valid JSON list** of dictionaries. Each dictionary must have keys: 'speaker', 'text', 'voice_id'. "
             f"Use this voice_id for Host: {HOST_VOICE_ID}, and this for Guest: {GUEST_VOICE_ID}. "
             "Use only double quotes (\") for all keys and values. Do not wrap the output in markdown or code blocks.\n\n"
