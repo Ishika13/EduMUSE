@@ -15,9 +15,14 @@ import {
   Tooltip,
   Menu,
   MenuItem,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle
 } from '@mui/material';
-import { PictureAsPdf, Refresh, MoreVert, Summarize, Quiz, Podcasts, MusicNote } from '@mui/icons-material';
+import { PictureAsPdf, Refresh, MoreVert, Summarize, Quiz, Podcasts, MusicNote, Delete } from '@mui/icons-material';
 import FileUpload from './FileUpload';
 
 export default function FileList({ onFileSelect, selectedFile, onAction, isLoading }) {
@@ -27,6 +32,8 @@ export default function FileList({ onFileSelect, selectedFile, onAction, isLoadi
   const [processingFile, setProcessingFile] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedActionFile, setSelectedActionFile] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState(null);
 
   const fetchFiles = async () => {
     try {
@@ -79,6 +86,53 @@ export default function FileList({ onFileSelect, selectedFile, onAction, isLoadi
       // Close the menu
       handleActionMenuClose();
     }
+  };
+
+  const handleDeleteClick = () => {
+    // Store the file to delete and open the confirmation dialog
+    setFileToDelete(selectedActionFile);
+    setDeleteDialogOpen(true);
+    handleActionMenuClose();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!fileToDelete) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch('http://127.0.0.1:5000/delete-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename: fileToDelete.filename }),
+      });
+
+      if (response.ok) {
+        // If the file was deleted successfully, refresh the file list
+        fetchFiles();
+        
+        // If the deleted file was selected, clear the selection
+        if (selectedFile?.filename === fileToDelete.filename) {
+          onFileSelect(null);
+        }
+      } else {
+        const errorData = await response.json();
+        setError(`Failed to delete file: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      setError('Error connecting to server');
+      console.error('Error deleting file:', err);
+    } finally {
+      setLoading(false);
+      setDeleteDialogOpen(false);
+      setFileToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setFileToDelete(null);
   };
 
   // Reset processingFile when isLoading becomes false
@@ -208,11 +262,21 @@ export default function FileList({ onFileSelect, selectedFile, onAction, isLoadi
                 <Podcasts fontSize="small" />
               </ListItemIcon>
               <ListItemText primary="Generate Podcast" />
+            </MenuItem>,
+            <Divider key="divider" />,
+            <MenuItem key="delete" onClick={handleDeleteClick}>
+              <ListItemIcon>
+                <Delete fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Delete File" primaryTypographyProps={{ color: 'error' }} />
             </MenuItem>
           ] : selectedActionFile && selectedActionFile.type === 'podcast' ? [
-            // Podcast file actions (none available)
-            <MenuItem key="no-actions" disabled>
-              <ListItemText primary="No actions available for podcasts" />
+            // Podcast file actions
+            <MenuItem key="delete" onClick={handleDeleteClick}>
+              <ListItemIcon>
+                <Delete fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Delete File" primaryTypographyProps={{ color: 'error' }} />
             </MenuItem>
           ] : null}
         </Menu>
@@ -234,6 +298,31 @@ export default function FileList({ onFileSelect, selectedFile, onAction, isLoadi
       >
         Refresh List
       </Button>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+      >
+        <DialogTitle id="delete-dialog-title">
+          Confirm Delete
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-dialog-description">
+            Are you sure you want to delete "{fileToDelete?.filename}"? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

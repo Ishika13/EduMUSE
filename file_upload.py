@@ -108,6 +108,42 @@ def list_files():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/delete-file', methods=['POST'])
+@cross_origin()
+def delete_file():
+    """Deletes a file from the uploads folder."""
+    try:
+        data = request.json
+        filename = data.get('filename')
+        
+        if not filename:
+            return jsonify({'error': 'No filename provided'}), 400
+        
+        # Secure the filename to prevent directory traversal attacks
+        filename = secure_filename(filename)
+        
+        # Check if the file is in a subdirectory (like podcasts/)
+        if '/' in filename:
+            directory, file = filename.rsplit('/', 1)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], directory, file)
+        else:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Check if the file exists
+        if not os.path.exists(filepath):
+            return jsonify({'error': f"File not found: {filename}"}), 404
+        
+        # Delete the file
+        os.remove(filepath)
+        
+        return jsonify({
+            'message': f"File {filename} deleted successfully",
+            'filename': filename
+        }), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/health', methods=['GET'])
 @cross_origin()
 def health_check():
